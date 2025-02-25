@@ -1,5 +1,6 @@
 import { google } from "@ai-sdk/google";
 import { streamText } from "ai";
+import { systemPrompt } from "./constants";
 
 export async function* generateResponse(
   prompt: string
@@ -7,7 +8,7 @@ export async function* generateResponse(
   try {
     const result = await streamText({
       model: google("gemini-2.0-flash-exp"),
-      prompt: "Invent a new holiday and describe its traditions.",
+      prompt: `${systemPrompt}\n${prompt}`,
     });
 
     for await (const textPart of result.textStream) {

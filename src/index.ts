@@ -1,7 +1,6 @@
 import * as dotenv from "dotenv";
 
 import { Telegraf } from "telegraf";
-import { message } from "telegraf/filters";
 import { generateResponse } from "./ai-service";
 
 dotenv.config();
@@ -28,15 +27,11 @@ bot.command("start", async (ctx) => {
       _isWhitelisted
         ? ""
         : " This chat doesn't seem to be whitelisted. I can't respond here, sorry."
-    }`
+    }`,
+    {
+      reply_parameters: { message_id: ctx.message.message_id },
+    }
   );
-});
-
-bot.help((ctx) => {
-  const chatId = ctx.chat.id;
-  if (!isWhitelisted(chatId)) return;
-
-  ctx.reply("Just send me a message, and I’ll respond using Gemini 2.0 AI!");
 });
 
 bot.command("prompt", async (ctx) => {
@@ -45,19 +40,23 @@ bot.command("prompt", async (ctx) => {
 
   const prompt = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!prompt) {
-    await ctx.reply("Please provide a prompt! Usage: /prompt <your question>");
+    ctx.reply("Please provide a prompt! Usage: /prompt <your question>", {
+      reply_parameters: { message_id: ctx.message.message_id },
+    });
     return;
   }
 
   try {
     // Send initial message
-    const initialMessage = await ctx.reply("Thinking...");
+    const initialMessage = await ctx.reply("Thinking...", {
+      reply_parameters: { message_id: ctx.message.message_id },
+    });
     const messageId = initialMessage.message_id;
     let buffer = "";
     let lastUpdateTime = Date.now();
     const UPDATE_INTERVAL = 3000; // 3 seconds
 
-    // Stream and buffer response
+    // Stream plain text response
     for await (const chunk of generateResponse(prompt)) {
       buffer += chunk;
 
@@ -68,18 +67,17 @@ bot.command("prompt", async (ctx) => {
             chatId,
             messageId,
             undefined,
-            buffer || "Processing...",
-            { parse_mode: "Markdown" }
+            buffer || "Processing..." // No parse_mode, plain text
           )
           .catch((err) => {
             if (err.description.includes("message is not modified")) return;
+            console.error("Edit error:", err);
             throw err;
           });
         lastUpdateTime = currentTime;
       }
     }
 
-    // Final update with complete response
     await ctx.telegram.editMessageText(
       chatId,
       messageId,
@@ -89,7 +87,9 @@ bot.command("prompt", async (ctx) => {
     );
   } catch (error) {
     console.error("Error processing prompt:", error);
-    await ctx.reply("Sorry, something went wrong. Please try again!");
+    await ctx.reply("Sorry, something went wrong. Please try again!", {
+      reply_parameters: { message_id: ctx.message.message_id },
+    });
   }
 });
 
@@ -102,10 +102,10 @@ bot.catch((err, ctx) => {
 bot.launch().then(async () => {
   console.log("Bot started successfully");
 
-  const webhookUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}/api/bot`
-    : "your-custom-domain/api/bot";
-  await bot.telegram.setWebhook(webhookUrl);
+  // const webhookUrl = process.env.VERCEL_URL
+  //   ? `https://${process.env.VERCEL_URL}/api/bot`
+  //   : "your-custom-domain/api/bot";
+  // await bot.telegram.setWebhook(webhookUrl);
 });
 
 // Graceful shutdown
