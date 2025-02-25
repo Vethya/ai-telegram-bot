@@ -5,19 +5,15 @@ import { generateResponse } from "./ai-service";
 
 dotenv.config();
 
-// Environment variables
 const BOT_TOKEN = process.env.BOT_TOKEN!;
 const WHITELIST_GROUP_IDS = process.env.WHITELIST_GROUP_IDS!.split(",");
 
-// Initialize bot
 const bot = new Telegraf(BOT_TOKEN);
 
-// Middleware to check whitelist
 const isWhitelisted = (chatId: number | string): boolean => {
   return WHITELIST_GROUP_IDS.includes(chatId.toString());
 };
 
-// Bot handlers
 bot.command("start", async (ctx) => {
   const chatId = ctx.chat.id;
   const _isWhitelisted = isWhitelisted(chatId);
@@ -36,7 +32,14 @@ bot.command("start", async (ctx) => {
 
 bot.command("prompt", async (ctx) => {
   const chatId = ctx.chat.id;
-  if (!isWhitelisted(chatId)) return;
+  const _isWhitelisted = isWhitelisted(chatId);
+
+  if (!_isWhitelisted) {
+    await ctx.reply("Sorry, I can't respond here!", {
+      reply_parameters: { message_id: ctx.message.message_id },
+    });
+    return;
+  }
 
   const prompt = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!prompt) {
@@ -47,16 +50,14 @@ bot.command("prompt", async (ctx) => {
   }
 
   try {
-    // Send initial message
     const initialMessage = await ctx.reply("Thinking...", {
       reply_parameters: { message_id: ctx.message.message_id },
     });
     const messageId = initialMessage.message_id;
     let buffer = "";
     let lastUpdateTime = Date.now();
-    const UPDATE_INTERVAL = 3000; // 3 seconds
+    const UPDATE_INTERVAL = 3000;
 
-    // Stream plain text response
     for await (const chunk of generateResponse(prompt)) {
       buffer += chunk;
 
@@ -67,7 +68,7 @@ bot.command("prompt", async (ctx) => {
             chatId,
             messageId,
             undefined,
-            buffer || "Processing..." // No parse_mode, plain text
+            buffer || "Processing..."
           )
           .catch((err) => {
             if (err.description.includes("message is not modified")) return;
@@ -93,16 +94,13 @@ bot.command("prompt", async (ctx) => {
   }
 });
 
-// Error handling
 bot.catch((err, ctx) => {
   console.error(`Error for ${ctx.updateType}:`, err);
 });
 
-// Launch bot
 bot.launch().then(async () => {
   console.log("Bot started successfully");
 });
 
-// Graceful shutdown
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
