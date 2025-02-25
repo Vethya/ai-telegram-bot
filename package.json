@@ -20,6 +20,7 @@
     "@ai-sdk/google": "^1.1.17",
     "@types/node": "^22.13.5",
     "ai": "^4.1.46",
+    "dotenv": "^16.4.7",
     "telegraf": "^4.16.3",
     "typescript": "^5.7.3"
   }

@@ -17,6 +17,9 @@ importers:
       ai:
         specifier: ^4.1.46
         version: 4.1.46(react@19.0.0)(zod@3.24.2)
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3
@@ -200,6 +203,10 @@ packages:
   diff@4.0.2:
     resolution: {integrity: sha512-58lmxKSA4BNyLz+HHMUzlOEpg09FV+ev6ZMe3vJihgdxzgcwZ8VoEEPmALCZG9LmqfVoNMMKpttIYTVG6uDY7A==}
     engines: {node: '>=0.3.1'}
+
+  dotenv@16.4.7:
+    resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
+    engines: {node: '>=12'}
 
   event-target-shim@5.0.1:
     resolution: {integrity: sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==}
@@ -557,6 +564,8 @@ snapshots:
   diff-match-patch@1.0.5: {}
 
   diff@4.0.2: {}
+
+  dotenv@16.4.7: {}
 
   event-target-shim@5.0.1: {}
 

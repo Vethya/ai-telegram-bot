@@ -1,12 +1,14 @@
+import * as dotenv from "dotenv";
+
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { generateResponse } from "./ai-service";
 
+dotenv.config();
+
 // Environment variables
-const BOT_TOKEN = process.env.BOT_TOKEN || "your-telegram-bot-token";
-const WHITELIST_GROUP_IDS = process.env.WHITELIST_GROUP_IDS?.split(",") || [
-  "your-group-id",
-];
+const BOT_TOKEN = process.env.BOT_TOKEN!;
+const WHITELIST_GROUP_IDS = process.env.WHITELIST_GROUP_IDS!.split(",");
 
 // Initialize bot
 const bot = new Telegraf(BOT_TOKEN);
@@ -53,8 +55,13 @@ bot.catch((err, ctx) => {
 });
 
 // Launch bot
-bot.launch().then(() => {
+bot.launch().then(async () => {
   console.log("Bot started successfully");
+
+  const webhookUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}/api/bot`
+    : "your-custom-domain/api/bot";
+  await bot.telegram.setWebhook(webhookUrl);
 });
 
 // Graceful shutdown
