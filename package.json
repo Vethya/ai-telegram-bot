@@ -1,0 +1,26 @@
+{
+  "name": "vethya-ai-tg",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^1.1.17",
+    "@types/node": "^22.13.5",
+    "ai": "^4.1.46",
+    "telegraf": "^4.16.3",
+    "typescript": "^5.7.3"
+  }
+}
