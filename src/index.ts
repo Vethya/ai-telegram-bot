@@ -101,11 +101,6 @@ bot.catch((err, ctx) => {
 // Launch bot
 bot.launch().then(async () => {
   console.log("Bot started successfully");
-
-  // const webhookUrl = process.env.VERCEL_URL
-  //   ? `https://${process.env.VERCEL_URL}/api/bot`
-  //   : "your-custom-domain/api/bot";
-  // await bot.telegram.setWebhook(webhookUrl);
 });
 
 // Graceful shutdown
