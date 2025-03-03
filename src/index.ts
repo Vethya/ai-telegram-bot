@@ -79,11 +79,12 @@ bot.command("prompt", async (ctx) => {
       }
     }
 
+    const strippedText = stripMarkdown(buffer);
     await ctx.telegram.editMessageText(
       chatId,
       messageId,
       undefined,
-      buffer || "Done!",
+      strippedText || "Done!",
       { parse_mode: "Markdown" }
     );
   } catch (error) {
@@ -93,6 +94,13 @@ bot.command("prompt", async (ctx) => {
     });
   }
 });
+
+function stripMarkdown(text: string): string {
+  text = text.replace(/^(\s*)\*\s+/gm, "$1- ");
+  text = text.replace(/\*(.+?)\*/g, "$1");
+
+  return text.trim();
+}
 
 bot.catch((err, ctx) => {
   console.error(`Error for ${ctx.updateType}:`, err);
