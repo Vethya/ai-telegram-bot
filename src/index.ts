@@ -30,7 +30,7 @@ bot.command("start", async (ctx) => {
   );
 });
 
-bot.command("prompt", async (ctx) => {
+bot.command(["prompt", "p"], async (ctx) => {
   const chatId = ctx.chat.id;
   const _isWhitelisted = isWhitelisted(chatId);
 
@@ -43,7 +43,7 @@ bot.command("prompt", async (ctx) => {
 
   const prompt = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!prompt) {
-    ctx.reply("Please provide a prompt! Usage: /prompt <your question>", {
+    ctx.reply("Please provide a prompt! Usage: /prompt or /p <your question>", {
       reply_parameters: { message_id: ctx.message.message_id },
     });
     return;
