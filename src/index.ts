@@ -80,13 +80,25 @@ bot.command("prompt", async (ctx) => {
     }
 
     const strippedText = stripMarkdown(buffer);
-    await ctx.telegram.editMessageText(
-      chatId,
-      messageId,
-      undefined,
-      strippedText || "Done!",
-      { parse_mode: "Markdown" }
-    );
+    try {
+      await ctx.telegram.editMessageText(
+        chatId,
+        messageId,
+        undefined,
+        strippedText || "Done!",
+        { parse_mode: "Markdown" }
+      );
+    } catch (error: any) {
+      if (error.description.includes("can't parse entities")) {
+        await ctx.telegram.editMessageText(
+          chatId,
+          messageId,
+          undefined,
+          strippedText || "Done!"
+        );
+      }
+      return;
+    }
   } catch (error) {
     console.error("Error processing prompt:", error);
     await ctx.reply("Sorry, something went wrong. Please try again!", {
