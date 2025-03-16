@@ -1,18 +1,40 @@
-import { Telegraf } from "telegraf";
+import { Telegraf, Context } from "telegraf";
 import { isBlacklisted, isRateLimited, isWhitelisted } from "../utils/checks";
 import { generateResponse } from "../ai-service";
+import { Message } from "telegraf/types";
 
+// Map to store user message ID to bot reply message ID
 const messageReplyMap = new Map<number, number>();
 
-import { Context } from "telegraf";
+// Map to store the reply chain (messageId -> { text, botResponse, parentId })
+const replyChainMap = new Map<
+  number,
+  { text: string; botResponse?: string; parentId?: number }
+>();
 
-export default (bot: Telegraf) => {
-  const handlePrompt = async (ctx: Context, isEdited: boolean = false) => {
+// Maximum chain length
+const MAX_CHAIN_LENGTH = 10;
+
+export default (bot: Telegraf<Context>) => {
+  // Helper function to check if a message has reply_to_message and is a text message
+  const isTextMessageWithReply = (
+    message: Message
+  ): message is Message.TextMessage => {
+    return "text" in message && "reply_to_message" in message;
+  };
+
+  // Core logic for handling a prompt (used for both initial, edited, and reply messages)
+  const handlePrompt = async (
+    ctx: Context,
+    isEdited: boolean = false,
+    isReplyWithoutCommand: boolean = false
+  ) => {
     const chatId = ctx.chat!.id;
     const userId = ctx.from?.id;
     const messageId = isEdited
       ? ctx.editedMessage!.message_id
       : ctx.message!.message_id;
+    const message = isEdited ? ctx.editedMessage : ctx.message;
 
     if (!userId) return;
 
@@ -36,7 +58,6 @@ export default (bot: Telegraf) => {
     }
 
     // Safely access the message text
-    const message = isEdited ? ctx.editedMessage : ctx.message;
     if (!("text" in message!)) {
       await ctx.reply("This command only works with text messages.", {
         reply_parameters: { message_id: messageId },
@@ -45,8 +66,12 @@ export default (bot: Telegraf) => {
     }
 
     const text = message.text;
-    const prompt = text.split(" ").slice(1).join(" ").trim();
-    if (!prompt) {
+    let prompt = isReplyWithoutCommand
+      ? text
+      : text.split(" ").slice(1).join(" ").trim();
+
+    // If this is a command and no prompt is provided, show usage
+    if (!isReplyWithoutCommand && !prompt) {
       await ctx.reply(
         "Please provide a prompt! Usage: /prompt or /p <your question>",
         {
@@ -54,6 +79,44 @@ export default (bot: Telegraf) => {
         }
       );
       return;
+    }
+
+    // Gather context from the reply chain if replying to a bot message
+    let context = "";
+    let chainLength = 0;
+    let replyToMessage: Message.TextMessage | undefined;
+    let userMessageId: number | undefined;
+    if (
+      isTextMessageWithReply(message) &&
+      message.reply_to_message &&
+      "text" in message.reply_to_message
+    ) {
+      replyToMessage = message.reply_to_message as Message.TextMessage;
+      // Find the user message ID associated with the bot's reply message ID
+      for (const [key, value] of messageReplyMap.entries()) {
+        if (value === replyToMessage.message_id) {
+          userMessageId = key;
+          break;
+        }
+      }
+      if (userMessageId && replyChainMap.has(userMessageId)) {
+        const chain = gatherReplyChain(userMessageId);
+        chainLength = chain.length;
+
+        // Trim the chain to the last MAX_CHAIN_LENGTH messages
+        const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
+        context = trimmedChain
+          .map((entry) => `${entry.text}\n${entry.botResponse || ""}`)
+          .join("\n---\n");
+        prompt = `${context}\n${prompt}`; // Append the new prompt to the context
+      }
+    } else {
+      // Store the initial prompt
+      replyChainMap.set(messageId, {
+        text,
+        botResponse: undefined,
+        parentId: undefined,
+      });
     }
 
     try {
@@ -108,6 +171,28 @@ export default (bot: Telegraf) => {
           strippedText || "Done!",
           { parse_mode: "Markdown" }
         );
+        // Update the reply chain with the bot's response
+        const chainEntry = replyChainMap.get(messageId) || {
+          text: "",
+          botResponse: undefined,
+          parentId: userMessageId,
+        };
+        chainEntry.botResponse = strippedText;
+        replyChainMap.set(messageId, chainEntry);
+
+        // Trim the chain if it exceeds MAX_CHAIN_LENGTH
+        if (chainLength >= MAX_CHAIN_LENGTH) {
+          const chain = gatherReplyChain(messageId);
+          const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
+          replyChainMap.clear();
+          trimmedChain.forEach((entry, index) => {
+            const newMessageId =
+              index === 0
+                ? trimmedChain[0].parentId || messageId
+                : trimmedChain[index - 1].parentId!;
+            replyChainMap.set(newMessageId, entry);
+          });
+        }
       } catch (error: any) {
         if (error.description.includes("can't parse entities")) {
           await ctx.telegram.editMessageText(
@@ -116,6 +201,13 @@ export default (bot: Telegraf) => {
             undefined,
             strippedText || "Done!"
           );
+          const chainEntry = replyChainMap.get(messageId) || {
+            text: "",
+            botResponse: undefined,
+            parentId: userMessageId,
+          };
+          chainEntry.botResponse = strippedText;
+          replyChainMap.set(messageId, chainEntry);
         }
         return;
       }
@@ -127,6 +219,28 @@ export default (bot: Telegraf) => {
     }
   };
 
+  // Helper function to gather the reply chain
+  const gatherReplyChain = (
+    messageId: number
+  ): { text: string; botResponse?: string; parentId?: number }[] => {
+    const chain: { text: string; botResponse?: string; parentId?: number }[] =
+      [];
+    let currentId: number | undefined = messageId;
+
+    while (currentId !== undefined) {
+      const entry = replyChainMap.get(currentId);
+      if (entry) {
+        chain.unshift(entry); // Add to the beginning to maintain chronological order
+        currentId = entry.parentId;
+      } else {
+        break;
+      }
+    }
+
+    return chain;
+  };
+
+  // Handle initial /prompt or /p command
   bot.command(["prompt", "p"], async (ctx) => {
     await handlePrompt(ctx);
   });
@@ -142,6 +256,31 @@ export default (bot: Telegraf) => {
     if (!commandMatch) return;
 
     await handlePrompt(ctx, true);
+  });
+
+  bot.on("message", async (ctx) => {
+    if (!ctx.message) return;
+    if (!("text" in ctx.message)) return;
+
+    const replyToMessage = ctx.message.reply_to_message;
+    if (!replyToMessage || !isTextMessageWithReply(ctx.message)) {
+      return;
+    }
+
+    let userMessageId: number | undefined;
+    for (const [key, value] of messageReplyMap.entries()) {
+      if (value === replyToMessage.message_id) {
+        userMessageId = key;
+        break;
+      }
+    }
+
+    if (userMessageId && replyChainMap.has(userMessageId)) {
+      const text = ctx.message.text;
+      if (text.startsWith("/")) return;
+
+      await handlePrompt(ctx, false, true);
+    }
   });
 
   function stripMarkdown(text: string): string {
