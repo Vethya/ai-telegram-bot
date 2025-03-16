@@ -86,32 +86,40 @@ export default (bot: Telegraf<Context>) => {
     let chainLength = 0;
     let replyToMessage: Message.TextMessage | undefined;
     let userMessageId: number | undefined;
-    if (
-      isTextMessageWithReply(message) &&
-      message.reply_to_message &&
-      "text" in message.reply_to_message
-    ) {
-      replyToMessage = message.reply_to_message as Message.TextMessage;
-      // Find the user message ID associated with the bot's reply message ID
-      for (const [key, value] of messageReplyMap.entries()) {
-        if (value === replyToMessage.message_id) {
-          userMessageId = key;
-          break;
-        }
-      }
-      if (userMessageId && replyChainMap.has(userMessageId)) {
-        const chain = gatherReplyChain(userMessageId);
-        chainLength = chain.length;
+    if (isTextMessageWithReply(message) && message.reply_to_message) {
+      if ("text" in message.reply_to_message) {
+        replyToMessage = message.reply_to_message;
 
-        // Trim the chain to the last MAX_CHAIN_LENGTH messages
-        const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
-        context = trimmedChain
-          .map((entry) => `${entry.text}\n${entry.botResponse || ""}`)
-          .join("\n---\n");
-        prompt = `${context}\n${prompt}`; // Append the new prompt to the context
+        // Check if the replied-to message is a bot message (part of a reply chain)
+        for (const [key, value] of messageReplyMap.entries()) {
+          if (value === replyToMessage.message_id) {
+            userMessageId = key;
+            break;
+          }
+        }
+
+        if (userMessageId && replyChainMap.has(userMessageId)) {
+          // Replied to a bot message, so include the full reply chain
+          const chain = gatherReplyChain(userMessageId);
+          chainLength = chain.length;
+
+          // Trim the chain to the last MAX_CHAIN_LENGTH messages
+          const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
+          context = trimmedChain
+            .map((entry) => `${entry.text}\n${entry.botResponse || ""}`)
+            .join("\n---\n");
+          prompt = `${context}\n${prompt}`; // Append the new prompt to the context
+        } else {
+          context = replyToMessage.text;
+          prompt = `${context}\n${prompt}`; // Include the replied-to message text in the prompt
+        }
+      } else {
+        await ctx.reply("The replied-to message must be a text message.", {
+          reply_parameters: { message_id: messageId },
+        });
+        return;
       }
     } else {
-      // Store the initial prompt
       replyChainMap.set(messageId, {
         text,
         botResponse: undefined,
