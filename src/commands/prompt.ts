@@ -9,21 +9,73 @@ const messageReplyMap = new Map<number, number>();
 // Map to store the reply chain (messageId -> { text, botResponse, parentId })
 const replyChainMap = new Map<
   number,
-  { text: string; botResponse?: string; parentId?: number }
+  {
+    text: string;
+    botResponse?: string;
+    parentId?: number;
+    imageUrl?: string;
+  }
 >();
 
 // Maximum chain length
 const MAX_CHAIN_LENGTH = 10;
 
 export default (bot: Telegraf<Context>) => {
-  // Helper function to check if a message has reply_to_message and is a text message
-  const isTextMessageWithReply = (
+  // Helper to get image URL from a message if it exists
+  const getImageUrl = async (
+    ctx: Context,
     message: Message
-  ): message is Message.TextMessage => {
-    return "text" in message && "reply_to_message" in message;
+  ): Promise<string | undefined> => {
+    if ("photo" in message && message.photo && message.photo.length > 0) {
+      // Get the highest resolution photo (last in the array)
+      const fileId = message.photo[message.photo.length - 1].file_id;
+      try {
+        const fileInfo = await ctx.telegram.getFile(fileId);
+        return `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.file_path}`;
+      } catch (error) {
+        console.error("Error getting file info:", error);
+        return undefined;
+      }
+    }
+    return undefined;
   };
 
-  // Core logic for handling a prompt (used for both initial, edited, and reply messages)
+  // Helper function to gather the reply chain
+  const gatherReplyChain = (
+    messageId: number
+  ): {
+    text: string;
+    botResponse?: string;
+    parentId?: number;
+    imageUrl?: string;
+  }[] => {
+    const chain: {
+      text: string;
+      botResponse?: string;
+      parentId?: number;
+      imageUrl?: string;
+    }[] = [];
+    let currentId: number | undefined = messageId;
+
+    while (currentId !== undefined) {
+      const entry = replyChainMap.get(currentId);
+      if (entry) {
+        chain.unshift(entry); // Add to the beginning to maintain chronological order
+        currentId = entry.parentId;
+      } else {
+        break;
+      }
+    }
+
+    return chain;
+  };
+
+  function stripMarkdown(text: string): string {
+    text = text.replace(/^(\s*)\*\s+/gm, "$1- ");
+    text = text.replace(/\*(.+?)\*/g, "$1");
+    return text.trim();
+  }
+
   const handlePrompt = async (
     ctx: Context,
     isEdited: boolean = false,
@@ -51,26 +103,49 @@ export default (bot: Telegraf<Context>) => {
     }
 
     if (isRateLimited(userId)) {
+      await ctx.reply(
+        "You're sending messages too quickly. Please slow down.",
+        {
+          reply_parameters: { message_id: messageId },
+        }
+      );
       return;
     }
 
-    // Safely access the message text
-    if (!("text" in message!)) {
-      await ctx.reply("This command only works with text messages.", {
+    // Get message text and image if available
+    let text = "";
+    let currentImageUrl: string | undefined;
+
+    if ("text" in message!) {
+      text = message.text || "";
+    } else if ("caption" in message! && message.caption) {
+      text = message.caption;
+    } else if (!("photo" in message!)) {
+      await ctx.reply("This command works with text or images with captions.", {
         reply_parameters: { message_id: messageId },
       });
       return;
     }
 
-    const text = message.text;
+    // Get image URL if the message contains an image
+    if ("photo" in message!) {
+      currentImageUrl = await getImageUrl(ctx, message);
+      if (!currentImageUrl) {
+        await ctx.reply("Failed to process the image. Please try again.", {
+          reply_parameters: { message_id: messageId },
+        });
+        return;
+      }
+    }
+
     let prompt = isReplyWithoutCommand
       ? text
       : text.split(" ").slice(1).join(" ").trim();
 
-    // If this is a command and no prompt is provided, show usage
-    if (!isReplyWithoutCommand && !prompt) {
+    // If this is a command and no prompt or image is provided, show usage
+    if (!isReplyWithoutCommand && !prompt && !currentImageUrl) {
       await ctx.reply(
-        "Please provide a prompt! Usage: /prompt or /p <your question>",
+        "Please provide a prompt or image! Usage: /prompt or /p <your question> or send an image with caption",
         {
           reply_parameters: { message_id: messageId },
         }
@@ -81,57 +156,100 @@ export default (bot: Telegraf<Context>) => {
     // Gather context from the reply chain if replying to a bot message
     let contextMessages: Array<{
       role: "user" | "assistant";
-      content: string;
+      content: any; // Can be string or array of content objects
     }> = [];
     let chainLength = 0;
-    let replyToMessage: Message.TextMessage | undefined;
+    let replyToMessage: Message | undefined;
     let userMessageId: number | undefined;
-    if (isTextMessageWithReply(message) && message.reply_to_message) {
-      if ("text" in message.reply_to_message) {
-        replyToMessage = message.reply_to_message;
+    let replyImageUrl: string | undefined;
 
-        // Check if the replied-to message is a bot message (part of a reply chain)
-        for (const [key, value] of messageReplyMap.entries()) {
-          if (value === replyToMessage.message_id) {
-            userMessageId = key;
-            break;
+    // Check if this is a reply to another message
+    if ("reply_to_message" in message! && message.reply_to_message) {
+      replyToMessage = message.reply_to_message;
+
+      // Check if the replied message contains an image
+      replyImageUrl = await getImageUrl(ctx, replyToMessage);
+
+      // Check if the replied-to message is a bot message (part of a reply chain)
+      for (const [key, value] of messageReplyMap.entries()) {
+        if (value === replyToMessage.message_id) {
+          userMessageId = key;
+          break;
+        }
+      }
+
+      if (userMessageId && replyChainMap.has(userMessageId)) {
+        // Replied to a bot message, so include the full reply chain
+        const chain = gatherReplyChain(userMessageId);
+        chainLength = chain.length;
+
+        // Trim the chain to the last MAX_CHAIN_LENGTH messages
+        const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
+
+        // Convert the chain to message format
+        trimmedChain.forEach((entry) => {
+          const userText = entry.text.replace(/^\/(prompt|p)\s+/, ""); // Remove command prefix if present
+
+          const userContent = [];
+          if (userText) {
+            userContent.push({ type: "text", text: userText });
           }
-        }
+          if (entry.imageUrl) {
+            userContent.push({ type: "image", image: entry.imageUrl });
+          }
 
-        if (userMessageId && replyChainMap.has(userMessageId)) {
-          // Replied to a bot message, so include the full reply chain
-          const chain = gatherReplyChain(userMessageId);
-          chainLength = chain.length;
-
-          // Trim the chain to the last MAX_CHAIN_LENGTH messages
-          const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
-
-          // Convert the chain to message format
-          trimmedChain.forEach((entry) => {
-            const userText = entry.text.replace(/^\/(prompt|p)\s+/, ""); // Remove command prefix if present
-            contextMessages.push({ role: "user", content: userText });
-            if (entry.botResponse) {
-              contextMessages.push({
-                role: "assistant",
-                content: entry.botResponse,
-              });
-            }
+          contextMessages.push({
+            role: "user",
+            content:
+              userContent.length === 1 && userContent[0].type === "text"
+                ? userContent[0].text
+                : userContent,
           });
-        } else if (replyToMessage.text) {
-          // Single reply to a message
-          contextMessages.push({ role: "user", content: replyToMessage.text });
-        }
-      } else {
-        await ctx.reply("The replied-to message must be a text message.", {
-          reply_parameters: { message_id: messageId },
+
+          if (entry.botResponse) {
+            contextMessages.push({
+              role: "assistant",
+              content: entry.botResponse,
+            });
+          }
         });
+      } else if ("text" in replyToMessage && replyToMessage.text) {
+        // Single reply to a text message
+        contextMessages.push({ role: "user", content: replyToMessage.text });
+      } else if (replyImageUrl) {
+        // Single reply to an image message
+        let replyText = "";
+        if ("caption" in replyToMessage && replyToMessage.caption) {
+          replyText = replyToMessage.caption;
+        }
+
+        const replyContent = [];
+        if (replyText) {
+          replyContent.push({ type: "text", text: replyText });
+        }
+        replyContent.push({ type: "image", image: replyImageUrl });
+
+        contextMessages.push({
+          role: "user",
+          content: replyContent,
+        });
+      } else {
+        await ctx.reply(
+          "The replied-to message must contain text or an image.",
+          {
+            reply_parameters: { message_id: messageId },
+          }
+        );
         return;
       }
-    } else {
+    }
+    // If not replying to a message, just use this message
+    else {
       replyChainMap.set(messageId, {
         text,
         botResponse: undefined,
         parentId: undefined,
+        imageUrl: currentImageUrl,
       });
     }
 
@@ -139,7 +257,39 @@ export default (bot: Telegraf<Context>) => {
     const userPrompt = isReplyWithoutCommand
       ? prompt
       : prompt.replace(/^\/(prompt|p)\s+/, "");
-    contextMessages.push({ role: "user", content: userPrompt });
+
+    const userContent = [];
+
+    // Only add text content if there's actual text to add
+    if (userPrompt && userPrompt.trim() !== "") {
+      userContent.push({ type: "text", text: userPrompt });
+    }
+
+    if (currentImageUrl) {
+      userContent.push({ type: "image", image: currentImageUrl });
+    }
+
+    // If we're sending just an image but no text, add a default instruction
+    if (
+      userContent.length === 1 &&
+      userContent[0].type === "image" &&
+      (!userPrompt || userPrompt.trim() === "")
+    ) {
+      userContent.unshift({
+        type: "text",
+        text: "Please describe this image in detail.",
+      });
+    }
+
+    contextMessages.push({
+      role: "user",
+      content:
+        userContent.length === 1 && userContent[0].type === "text"
+          ? userContent[0].text
+          : userContent,
+    });
+
+    console.log("Context messages:", JSON.stringify(contextMessages, null, 2));
 
     try {
       let botReplyMessageId: number;
@@ -198,6 +348,7 @@ export default (bot: Telegraf<Context>) => {
           text: userPrompt,
           botResponse: undefined,
           parentId: userMessageId,
+          imageUrl: currentImageUrl, // Make sure to store the image URL
         };
         chainEntry.botResponse = strippedText;
         replyChainMap.set(messageId, chainEntry);
@@ -216,7 +367,10 @@ export default (bot: Telegraf<Context>) => {
           });
         }
       } catch (error: any) {
-        if (error.description.includes("can't parse entities")) {
+        if (
+          error.description &&
+          error.description.includes("can't parse entities")
+        ) {
           await ctx.telegram.editMessageText(
             chatId,
             botReplyMessageId,
@@ -227,11 +381,19 @@ export default (bot: Telegraf<Context>) => {
             text: userPrompt,
             botResponse: undefined,
             parentId: userMessageId,
+            imageUrl: currentImageUrl, // Make sure to store the image URL
           };
           chainEntry.botResponse = strippedText;
           replyChainMap.set(messageId, chainEntry);
+        } else {
+          console.error("Error updating message:", error);
+          await ctx.telegram.editMessageText(
+            chatId,
+            botReplyMessageId,
+            undefined,
+            "Error formatting response. Please try again."
+          );
         }
-        return;
       }
     } catch (error) {
       console.error("Error processing prompt:", error);
@@ -239,27 +401,6 @@ export default (bot: Telegraf<Context>) => {
         reply_parameters: { message_id: messageId },
       });
     }
-  };
-
-  // Helper function to gather the reply chain
-  const gatherReplyChain = (
-    messageId: number
-  ): { text: string; botResponse?: string; parentId?: number }[] => {
-    const chain: { text: string; botResponse?: string; parentId?: number }[] =
-      [];
-    let currentId: number | undefined = messageId;
-
-    while (currentId !== undefined) {
-      const entry = replyChainMap.get(currentId);
-      if (entry) {
-        chain.unshift(entry); // Add to the beginning to maintain chronological order
-        currentId = entry.parentId;
-      } else {
-        break;
-      }
-    }
-
-    return chain;
   };
 
   // Handle initial /prompt or /p command
@@ -271,23 +412,69 @@ export default (bot: Telegraf<Context>) => {
   bot.on("edited_message", async (ctx) => {
     if (!ctx.editedMessage) return;
 
-    if (!("text" in ctx.editedMessage)) return; // Ignore non-text messages
+    // Check if it's a text message with the command
+    if ("text" in ctx.editedMessage) {
+      const editedText = ctx.editedMessage.text;
+      const commandMatch = editedText.match(/^\/(prompt|p)(?:\s|$)/);
+      if (commandMatch) {
+        await handlePrompt(ctx, true);
+        return;
+      }
+    }
 
-    const editedText = ctx.editedMessage.text;
-    const commandMatch = editedText.match(/^\/(prompt|p)(?:\s|$)/);
-    if (!commandMatch) return;
-
-    await handlePrompt(ctx, true);
+    // Check if it's a photo with caption containing the command
+    if ("photo" in ctx.editedMessage && ctx.editedMessage.caption) {
+      const editedCaption = ctx.editedMessage.caption;
+      const commandMatch = editedCaption.match(/^\/(prompt|p)(?:\s|$)/);
+      if (commandMatch) {
+        await handlePrompt(ctx, true);
+        return;
+      }
+    }
   });
 
+  // Handle photo messages with /prompt or /p command in caption
+  bot.on("photo", async (ctx) => {
+    if (!ctx.message) return;
+
+    // Handle photos with captions that include our command
+    if (ctx.message.caption) {
+      const captionText = ctx.message.caption;
+      const commandMatch = captionText.match(/^\/(prompt|p)(?:\s|$)/);
+      if (commandMatch) {
+        await handlePrompt(ctx);
+        return;
+      }
+    }
+
+    // Also handle photo replies to bot messages even without command
+    if ("reply_to_message" in ctx.message && ctx.message.reply_to_message) {
+      const replyToMessage = ctx.message.reply_to_message;
+
+      // Check if replying to a bot message
+      let userMessageId: number | undefined;
+      for (const [key, value] of messageReplyMap.entries()) {
+        if (value === replyToMessage.message_id) {
+          userMessageId = key;
+          break;
+        }
+      }
+
+      if (userMessageId && replyChainMap.has(userMessageId)) {
+        await handlePrompt(ctx, false, true);
+      }
+    }
+  });
+
+  // Handle replies to messages
   bot.on("message", async (ctx) => {
     if (!ctx.message) return;
-    if (!("text" in ctx.message)) return;
+
+    // Check if reply_to_message property exists
+    if (!("reply_to_message" in ctx.message) || !ctx.message.reply_to_message)
+      return;
 
     const replyToMessage = ctx.message.reply_to_message;
-    if (!replyToMessage || !isTextMessageWithReply(ctx.message)) {
-      return;
-    }
 
     let userMessageId: number | undefined;
     for (const [key, value] of messageReplyMap.entries()) {
@@ -298,16 +485,17 @@ export default (bot: Telegraf<Context>) => {
     }
 
     if (userMessageId && replyChainMap.has(userMessageId)) {
-      const text = ctx.message.text;
-      if (text.startsWith("/")) return;
+      // Don't process commands except prompt commands in this handler
+      if (
+        "text" in ctx.message &&
+        ctx.message.text &&
+        ctx.message.text.startsWith("/")
+      ) {
+        const commandMatch = ctx.message.text.match(/^\/(prompt|p)(?:\s|$)/);
+        if (!commandMatch) return;
+      }
 
       await handlePrompt(ctx, false, true);
     }
   });
-
-  function stripMarkdown(text: string): string {
-    text = text.replace(/^(\s*)\*\s+/gm, "$1- ");
-    text = text.replace(/\*(.+?)\*/g, "$1");
-    return text.trim();
-  }
 };

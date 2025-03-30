@@ -1,9 +1,6 @@
 import * as dotenv from "dotenv";
 
 import { Telegraf } from "telegraf";
-import { generateResponse } from "./ai-service";
-import { isAdmin, isBlacklisted, isRateLimited } from "./utils/checks";
-import { BLACKLIST, saveBlacklist } from "./utils/blacklist";
 
 dotenv.config();
 
