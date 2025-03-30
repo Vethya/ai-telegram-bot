@@ -39,9 +39,6 @@ export default (bot: Telegraf<Context>) => {
     if (!userId) return;
 
     if (isBlacklisted(userId)) {
-      await ctx.reply("You are blacklisted and cannot use this bot!", {
-        reply_parameters: { message_id: messageId },
-      });
       return;
     }
 
