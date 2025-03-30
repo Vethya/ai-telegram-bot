@@ -79,7 +79,10 @@ export default (bot: Telegraf<Context>) => {
     }
 
     // Gather context from the reply chain if replying to a bot message
-    let context = "";
+    let contextMessages: Array<{
+      role: "user" | "assistant";
+      content: string;
+    }> = [];
     let chainLength = 0;
     let replyToMessage: Message.TextMessage | undefined;
     let userMessageId: number | undefined;
@@ -102,13 +105,21 @@ export default (bot: Telegraf<Context>) => {
 
           // Trim the chain to the last MAX_CHAIN_LENGTH messages
           const trimmedChain = chain.slice(-MAX_CHAIN_LENGTH);
-          context = trimmedChain
-            .map((entry) => `${entry.text}\n${entry.botResponse || ""}`)
-            .join("\n---\n");
-          prompt = `${context}\n${prompt}`; // Append the new prompt to the context
-        } else {
-          context = replyToMessage.text;
-          prompt = `${context}\n${prompt}`; // Include the replied-to message text in the prompt
+
+          // Convert the chain to message format
+          trimmedChain.forEach((entry) => {
+            const userText = entry.text.replace(/^\/(prompt|p)\s+/, ""); // Remove command prefix if present
+            contextMessages.push({ role: "user", content: userText });
+            if (entry.botResponse) {
+              contextMessages.push({
+                role: "assistant",
+                content: entry.botResponse,
+              });
+            }
+          });
+        } else if (replyToMessage.text) {
+          // Single reply to a message
+          contextMessages.push({ role: "user", content: replyToMessage.text });
         }
       } else {
         await ctx.reply("The replied-to message must be a text message.", {
@@ -123,6 +134,12 @@ export default (bot: Telegraf<Context>) => {
         parentId: undefined,
       });
     }
+
+    // Add the current prompt as the last message
+    const userPrompt = isReplyWithoutCommand
+      ? prompt
+      : prompt.replace(/^\/(prompt|p)\s+/, "");
+    contextMessages.push({ role: "user", content: userPrompt });
 
     try {
       let botReplyMessageId: number;
@@ -146,7 +163,7 @@ export default (bot: Telegraf<Context>) => {
       let lastUpdateTime = Date.now();
       const UPDATE_INTERVAL = 3000;
 
-      for await (const chunk of generateResponse(prompt)) {
+      for await (const chunk of generateResponse(contextMessages)) {
         buffer += chunk;
 
         const currentTime = Date.now();
@@ -178,7 +195,7 @@ export default (bot: Telegraf<Context>) => {
         );
         // Update the reply chain with the bot's response
         const chainEntry = replyChainMap.get(messageId) || {
-          text: "",
+          text: userPrompt,
           botResponse: undefined,
           parentId: userMessageId,
         };
@@ -207,7 +224,7 @@ export default (bot: Telegraf<Context>) => {
             strippedText || "Done!"
           );
           const chainEntry = replyChainMap.get(messageId) || {
-            text: "",
+            text: userPrompt,
             botResponse: undefined,
             parentId: userMessageId,
           };
