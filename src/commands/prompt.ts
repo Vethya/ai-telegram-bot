@@ -1,5 +1,10 @@
 import { Telegraf, Context } from "telegraf";
-import { isBlacklisted, isRateLimited, isWhitelisted } from "../utils/checks";
+import {
+  isAdmin,
+  isBlacklisted,
+  isRateLimited,
+  isWhitelisted,
+} from "../utils/checks";
 import { generateResponse } from "../ai-service";
 import { Message } from "telegraf/types";
 
@@ -102,7 +107,7 @@ export default (bot: Telegraf<Context>) => {
       return;
     }
 
-    if (isRateLimited(userId)) {
+    if (isRateLimited(userId) && !isAdmin(userId)) {
       await ctx.reply(
         "You're sending messages too quickly. Please slow down.",
         {
