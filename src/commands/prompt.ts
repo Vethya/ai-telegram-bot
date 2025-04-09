@@ -126,9 +126,6 @@ export default (bot: Telegraf<Context>) => {
     } else if ("caption" in message! && message.caption) {
       text = message.caption;
     } else if (!("photo" in message!)) {
-      await ctx.reply("This command works with text or images with captions.", {
-        reply_parameters: { message_id: messageId },
-      });
       return;
     }
 
