@@ -416,67 +416,31 @@ export default (bot: Telegraf<Context>) => {
     await handlePrompt(ctx);
   });
 
-  // Handle edited messages
-  bot.on("edited_message", async (ctx) => {
-    if (!ctx.editedMessage) return;
-
-    // Check if it's a text message with the command
-    if ("text" in ctx.editedMessage) {
-      const editedText = ctx.editedMessage.text;
-      const commandMatch = editedText.match(/^\/(prompt|p)(?:\s|$)/);
-      if (commandMatch) {
-        await handlePrompt(ctx, true);
-        return;
-      }
-    }
-
-    // Check if it's a photo with caption containing the command
-    if ("photo" in ctx.editedMessage && ctx.editedMessage.caption) {
-      const editedCaption = ctx.editedMessage.caption;
-      const commandMatch = editedCaption.match(/^\/(prompt|p)(?:\s|$)/);
-      if (commandMatch) {
-        await handlePrompt(ctx, true);
-        return;
-      }
-    }
-  });
-
-  // Handle photo messages with /prompt or /p command in caption
-  bot.on("photo", async (ctx) => {
-    if (!ctx.message) return;
-
-    // Handle photos with captions that include our command
-    if (ctx.message.caption) {
-      const captionText = ctx.message.caption;
-      const commandMatch = captionText.match(/^\/(prompt|p)(?:\s|$)/);
-      if (commandMatch) {
-        await handlePrompt(ctx);
-        return;
-      }
-    }
-
-    // Also handle photo replies to bot messages even without command
-    if ("reply_to_message" in ctx.message && ctx.message.reply_to_message) {
-      const replyToMessage = ctx.message.reply_to_message;
-
-      // Check if replying to a bot message
-      let userMessageId: number | undefined;
-      for (const [key, value] of messageReplyMap.entries()) {
-        if (value === replyToMessage.message_id) {
-          userMessageId = key;
-          break;
-        }
-      }
-
-      if (userMessageId && replyChainMap.has(userMessageId)) {
-        await handlePrompt(ctx, false, true);
-      }
-    }
-  });
-
   // Handle replies to messages
   bot.on("message", async (ctx) => {
     if (!ctx.message) return;
+
+    // Check if the message is a text message and mentions the bot
+    if ("text" in ctx.message && ctx.message.text) {
+      const text = ctx.message.text;
+      
+      // Get bot info to check for username mentions
+      const botInfo = await ctx.telegram.getMe();
+      const botUsername = botInfo.username;
+      
+      // Check if the message mentions the bot
+      const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
+      if (mentionRegex.test(text)) {
+        // Extract the prompt after the mention
+        const prompt = text.replace(mentionRegex, '').trim();
+        
+        // If there's a prompt, handle it
+        if (prompt) {
+          await handlePrompt(ctx);
+          return;
+        }
+      }
+    }
 
     // Check if reply_to_message property exists
     if (!("reply_to_message" in ctx.message) || !ctx.message.reply_to_message)
@@ -504,6 +468,109 @@ export default (bot: Telegraf<Context>) => {
       }
 
       await handlePrompt(ctx, false, true);
+    }
+  });
+
+  // Handle edited messages
+  bot.on("edited_message", async (ctx) => {
+    if (!ctx.editedMessage) return;
+
+    // Check if it's a text message with the command
+    if ("text" in ctx.editedMessage) {
+      const editedText = ctx.editedMessage.text;
+      const commandMatch = editedText.match(/^\/(prompt|p)(?:\s|$)/);
+      if (commandMatch) {
+        await handlePrompt(ctx, true);
+        return;
+      }
+      
+      // Check if the message mentions the bot
+      const botInfo = await ctx.telegram.getMe();
+      const botUsername = botInfo.username;
+      const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
+      if (mentionRegex.test(editedText)) {
+        // Extract the prompt after the mention
+        const prompt = editedText.replace(mentionRegex, '').trim();
+        
+        // If there's a prompt, handle it
+        if (prompt) {
+          await handlePrompt(ctx, true);
+          return;
+        }
+      }
+    }
+
+    // Check if it's a photo with caption containing the command
+    if ("photo" in ctx.editedMessage && ctx.editedMessage.caption) {
+      const editedCaption = ctx.editedMessage.caption;
+      const commandMatch = editedCaption.match(/^\/(prompt|p)(?:\s|$)/);
+      if (commandMatch) {
+        await handlePrompt(ctx, true);
+        return;
+      }
+      
+      // Check if the caption mentions the bot
+      const botInfo = await ctx.telegram.getMe();
+      const botUsername = botInfo.username;
+      const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
+      if (mentionRegex.test(editedCaption)) {
+        // Extract the prompt after the mention
+        const prompt = editedCaption.replace(mentionRegex, '').trim();
+        
+        // If there's a prompt, handle it
+        if (prompt) {
+          await handlePrompt(ctx, true);
+          return;
+        }
+      }
+    }
+  });
+
+  // Handle photo messages with /prompt or /p command in caption
+  bot.on("photo", async (ctx) => {
+    if (!ctx.message) return;
+
+    // Handle photos with captions that include our command
+    if (ctx.message.caption) {
+      const captionText = ctx.message.caption;
+      const commandMatch = captionText.match(/^\/(prompt|p)(?:\s|$)/);
+      if (commandMatch) {
+        await handlePrompt(ctx);
+        return;
+      }
+      
+      // Check if the caption mentions the bot
+      const botInfo = await ctx.telegram.getMe();
+      const botUsername = botInfo.username;
+      const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
+      if (mentionRegex.test(captionText)) {
+        // Extract the prompt after the mention
+        const prompt = captionText.replace(mentionRegex, '').trim();
+        
+        // If there's a prompt, handle it
+        if (prompt) {
+          await handlePrompt(ctx);
+          return;
+        }
+      }
+    }
+
+    // Also handle photo replies to bot messages even without command
+    if ("reply_to_message" in ctx.message && ctx.message.reply_to_message) {
+      const replyToMessage = ctx.message.reply_to_message;
+
+      // Check if replying to a bot message
+      let userMessageId: number | undefined;
+      for (const [key, value] of messageReplyMap.entries()) {
+        if (value === replyToMessage.message_id) {
+          userMessageId = key;
+          break;
+        }
+      }
+
+      if (userMessageId && replyChainMap.has(userMessageId)) {
+        await handlePrompt(ctx, false, true);
+      }
     }
   });
 };
