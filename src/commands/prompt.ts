@@ -434,11 +434,8 @@ export default (bot: Telegraf<Context>) => {
         // Extract the prompt after the mention
         const prompt = text.replace(mentionRegex, '').trim();
         
-        // If there's a prompt, handle it
-        if (prompt) {
-          await handlePrompt(ctx);
-          return;
-        }
+        await handlePrompt(ctx);
+        return;
       }
     }
 
