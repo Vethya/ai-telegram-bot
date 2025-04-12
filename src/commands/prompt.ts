@@ -144,17 +144,6 @@ export default (bot: Telegraf<Context>) => {
       ? text
       : text.split(" ").slice(1).join(" ").trim();
 
-    // If this is a command and no prompt or image is provided, show usage
-    if (!isReplyWithoutCommand && !prompt && !currentImageUrl) {
-      await ctx.reply(
-        "Please provide a prompt or image! Usage: /prompt or /p <your question> or send an image with caption",
-        {
-          reply_parameters: { message_id: messageId },
-        }
-      );
-      return;
-    }
-
     // Gather context from the reply chain if replying to a bot message
     let contextMessages: Array<{
       role: "user" | "assistant";
@@ -200,6 +189,7 @@ export default (bot: Telegraf<Context>) => {
             userContent.push({ type: "image", image: entry.imageUrl });
           }
 
+          console.log("added in role user 1");
           contextMessages.push({
             role: "user",
             content:
@@ -217,6 +207,7 @@ export default (bot: Telegraf<Context>) => {
         });
       } else if ("text" in replyToMessage && replyToMessage.text) {
         // Single reply to a text message
+        console.log("added in role user 2");
         contextMessages.push({ role: "user", content: replyToMessage.text });
       } else if (replyImageUrl) {
         // Single reply to an image message
@@ -231,6 +222,7 @@ export default (bot: Telegraf<Context>) => {
         }
         replyContent.push({ type: "image", image: replyImageUrl });
 
+        console.log("added in role user 3");
         contextMessages.push({
           role: "user",
           content: replyContent,
@@ -247,6 +239,17 @@ export default (bot: Telegraf<Context>) => {
     }
     // If not replying to a message, just use this message
     else {
+      // If this is a command and no prompt or image is provided, show usage
+      if (!isReplyWithoutCommand && !prompt && !currentImageUrl) {
+        await ctx.reply(
+          "Please provide a prompt or image! Usage: /prompt or /p <your question> or send an image with caption",
+          {
+            reply_parameters: { message_id: messageId },
+          }
+        );
+        return;
+      }
+
       replyChainMap.set(messageId, {
         text,
         botResponse: undefined,
@@ -283,11 +286,14 @@ export default (bot: Telegraf<Context>) => {
       });
     }
 
+    console.log("added in role user 4");
     contextMessages.push({
       role: "user",
       content:
         userContent.length === 1 && userContent[0].type === "text"
           ? userContent[0].text
+          : replyImageUrl && userContent.length === 0
+          ? "Please describe this image in detail."
           : userContent,
     });
 
