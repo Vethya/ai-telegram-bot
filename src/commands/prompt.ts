@@ -287,15 +287,21 @@ export default (bot: Telegraf<Context>) => {
     }
 
     console.log("added in role user 4");
+    if (userContent.length === 1 && userContent[0].type === "text") {
+      contextMessages.push({
+        role: "user",
+        content:userContent[0].text,
+      });
+    } else if (userContent.length === 0 && replyImageUrl) {
+      contextMessages.push({
+        role: "user",
+        content: "Please describe this image in detail.",
+      });
+    } else if (userContent.length === 0 && replyToMessage && "text" in replyToMessage && replyToMessage.text) {
     contextMessages.push({
       role: "user",
-      content:
-        userContent.length === 1 && userContent[0].type === "text"
-          ? userContent[0].text
-          : replyImageUrl && userContent.length === 0
-          ? "Please describe this image in detail."
-          : userContent,
-    });
+      content: "Please describe this text.",
+    })};
 
     console.log("Context messages:", JSON.stringify(contextMessages, null, 2));
 
