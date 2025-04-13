@@ -84,7 +84,8 @@ export default (bot: Telegraf<Context>) => {
   const handlePrompt = async (
     ctx: Context,
     isEdited: boolean = false,
-    isReplyWithoutCommand: boolean = false
+    isReplyWithoutCommand: boolean = false,
+    isFromMention: boolean = false
   ) => {
     const chatId = ctx.chat!.id;
     const userId = ctx.from?.id;
@@ -258,10 +259,20 @@ export default (bot: Telegraf<Context>) => {
       });
     }
 
+    let userPrompt = "";
+
     // Add the current prompt as the last message
-    const userPrompt = isReplyWithoutCommand
-      ? prompt
-      : prompt.replace(/^\/(prompt|p)\s+/, "");
+    if (isReplyWithoutCommand) {
+      userPrompt = prompt;
+    } else if (isFromMention) {
+      const botInfo = await ctx.telegram.getMe();
+      const botUsername = botInfo.username;
+      const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
+
+      userPrompt = text.replace(mentionRegex, '').trim();
+    } else {
+      userPrompt = prompt.replace(/^\/(prompt|p)\s+/, "");
+    }
 
     const userContent = [];
 
@@ -440,7 +451,7 @@ export default (bot: Telegraf<Context>) => {
         // Extract the prompt after the mention
         const prompt = text.replace(mentionRegex, '').trim();
         
-        await handlePrompt(ctx);
+        await handlePrompt(ctx, false, false, true);
         return;
       }
     }
