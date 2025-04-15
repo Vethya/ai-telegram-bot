@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { addToBlacklist, removeFromBlacklist } from "../db/services";
 
 const BLACKLIST_FILE = "./blacklist.json";
 const loadBlacklist = async () => {
@@ -10,8 +11,12 @@ const loadBlacklist = async () => {
   }
 };
 
-export const saveBlacklist = async () => {
-  await fs.writeFile(BLACKLIST_FILE, JSON.stringify([...BLACKLIST]));
+export const saveBlacklist = async (userId: string) => {
+  await addToBlacklist(userId);
+};
+
+export const removeFromBlacklistFile = async (userId: string) => {
+  await removeFromBlacklist(userId);
 };
 
 export let BLACKLIST: Set<string> = new Set<string>();

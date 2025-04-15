@@ -1,15 +1,13 @@
 import * as dotenv from "dotenv";
-import { BLACKLIST } from "./blacklist";
+import { isAdmin as isAdminDB, isWhitelisted as isWhitelistedDB, isBlacklisted as isBlacklistedDB } from "../db/services";
 
 dotenv.config();
 
-const WHITELIST_GROUP_IDS = process.env.WHITELIST_GROUP_IDS!.split(",");
 const RATE_LIMIT_SECONDS = 10;
 const rateLimitMap = new Map<number, number>();
-const ADMINS = process.env.ADMINS!.split(",");
 
-export const isWhitelisted = (chatId: number | string): boolean => {
-  return WHITELIST_GROUP_IDS.includes(chatId.toString());
+export const isWhitelisted = async (chatId: number | string): Promise<boolean> => {
+  return await isWhitelistedDB(chatId.toString());
 };
 
 export const isRateLimited = (userId: number): boolean => {
@@ -25,10 +23,10 @@ export const isRateLimited = (userId: number): boolean => {
   return false;
 };
 
-export const isAdmin = (userId: number | string): boolean => {
-  return ADMINS.includes(userId.toString());
+export const isAdmin = async (userId: number | string): Promise<boolean> => {
+  return await isAdminDB(userId.toString());
 };
 
-export const isBlacklisted = (userId: number | string): boolean => {
-  return BLACKLIST.has(userId.toString());
+export const isBlacklisted = async (userId: number | string): Promise<boolean> => {
+  return await isBlacklistedDB(userId.toString());
 };

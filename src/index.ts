@@ -1,35 +1,27 @@
-import * as dotenv from "dotenv";
-
 import { Telegraf } from "telegraf";
+import * as dotenv from "dotenv";
+import { connectDB } from "./db/connection";
+import startCommand from "./commands/start";
+import promptCommand from "./commands/prompt";
+import blacklistCommand from "./commands/blacklist";
 
 dotenv.config();
 
-const BOT_TOKEN = process.env.BOT_TOKEN!;
+const bot = new Telegraf(process.env.BOT_TOKEN!);
 
-const bot = new Telegraf(BOT_TOKEN);
-let botId: number | undefined;
+// Connect to MongoDB
+connectDB().catch(console.error);
 
-import("./commands/start").then(({ default: startCommand }) =>
-  startCommand(bot)
-);
-import("./commands/prompt").then(({ default: promptCommand }) =>
-  promptCommand(bot)
-);
-import("./commands/blacklist").then(({ default: blacklistCommand }) =>
-  blacklistCommand(bot)
-);
+// Register commands in a specific order
+startCommand(bot);
+blacklistCommand(bot); // Register blacklist commands before prompt
+promptCommand(bot);
 
-bot.catch((err, ctx) => {
-  console.error(`Error for ${ctx.updateType}:`, err);
+// Start the bot
+bot.launch().then(() => {
+  console.log("Bot started successfully!");
 });
 
-bot.launch().then(async () => {
-  console.log("Bot started successfully");
-
-  const me = await bot.telegram.getMe();
-  botId = me.id;
-  console.log(`Bot ID: ${botId}`);
-});
-
+// Enable graceful stop
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));

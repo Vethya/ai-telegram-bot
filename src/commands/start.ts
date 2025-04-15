@@ -4,7 +4,7 @@ import { isWhitelisted } from "../utils/checks";
 export default (bot: Telegraf) => {
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat.id;
-    const _isWhitelisted = isWhitelisted(chatId);
+    const _isWhitelisted = await isWhitelisted(chatId);
 
     await ctx.reply(
       `Hello! I'm Vethya AI!${

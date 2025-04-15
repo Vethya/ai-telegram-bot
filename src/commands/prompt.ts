@@ -96,11 +96,11 @@ export default (bot: Telegraf<Context>) => {
 
     if (!userId) return;
 
-    if (isBlacklisted(userId)) {
+    if (await isBlacklisted(userId)) {
       return;
     }
 
-    const _isWhitelisted = isWhitelisted(chatId);
+    const _isWhitelisted = await isWhitelisted(chatId);
     if (!_isWhitelisted) {
       await ctx.reply("Sorry, I can't respond here!", {
         reply_parameters: { message_id: messageId },
@@ -108,7 +108,7 @@ export default (bot: Telegraf<Context>) => {
       return;
     }
 
-    if (isRateLimited(userId) && !isAdmin(userId)) {
+    if ((await isRateLimited(userId)) && !(await isAdmin(userId))) {
       await ctx.reply(
         "You're sending messages too quickly. Please slow down.",
         {
@@ -471,16 +471,21 @@ export default (bot: Telegraf<Context>) => {
     }
 
     if (userMessageId && replyChainMap.has(userMessageId)) {
-      // Don't process commands except prompt commands in this handler
+      // Only process prompt commands in this handler
       if (
         "text" in ctx.message &&
         ctx.message.text &&
         ctx.message.text.startsWith("/")
       ) {
+        // Check if it's a prompt command
         const commandMatch = ctx.message.text.match(/^\/(prompt|p)(?:\s|$)/);
-        if (!commandMatch) return;
+        if (!commandMatch) {
+          // Not a prompt command, let other handlers process it
+          return;
+        }
       }
 
+      // Process the prompt
       await handlePrompt(ctx, false, true);
     }
   });

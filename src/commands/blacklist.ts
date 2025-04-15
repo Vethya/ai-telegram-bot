@@ -1,12 +1,12 @@
 import { Telegraf } from "telegraf";
 import { isAdmin, isWhitelisted } from "../utils/checks";
-import { BLACKLIST, saveBlacklist } from "../utils/blacklist";
+import { saveBlacklist, removeFromBlacklistFile } from "../utils/blacklist";
 
 export default (bot: Telegraf) => {
   bot.command("blacklist", async (ctx) => {
     const userId = ctx.from?.id;
 
-    if (!userId || !isAdmin(userId)) {
+    if (!userId || !(await isAdmin(userId))) {
       await ctx.reply("Only admins can use this command!", {
         reply_parameters: { message_id: ctx.message.message_id },
       });
@@ -37,22 +37,21 @@ export default (bot: Telegraf) => {
       return;
     }
 
-    if (isAdmin(targetId)) {
+    if (await isAdmin(targetId)) {
       await ctx.reply("You can't blacklist an admin!", {
         reply_parameters: { message_id: ctx.message.message_id },
       });
       return;
     }
 
-    if (!isWhitelisted(chatId)) {
+    if (!(await isWhitelisted(chatId))) {
       await ctx.reply("This chat is not whitelisted!", {
         reply_parameters: { message_id: ctx.message.message_id },
       });
       return;
     }
 
-    BLACKLIST.add(targetId.toString());
-    await saveBlacklist();
+    await saveBlacklist(targetId.toString());
     await ctx.reply(`User ${targetId} has been blacklisted.`, {
       reply_parameters: { message_id: ctx.message.message_id },
     });
@@ -61,7 +60,7 @@ export default (bot: Telegraf) => {
   bot.command("unblacklist", async (ctx) => {
     const userId = ctx.from?.id;
 
-    if (!userId || !isAdmin(userId)) {
+    if (!userId || !(await isAdmin(userId))) {
       await ctx.reply("Only admins can use this command!", {
         reply_parameters: { message_id: ctx.message.message_id },
       });
@@ -92,22 +91,14 @@ export default (bot: Telegraf) => {
       return;
     }
 
-    if (!isWhitelisted(chatId)) {
+    if (!(await isWhitelisted(chatId))) {
       await ctx.reply("This chat is not whitelisted!", {
         reply_parameters: { message_id: ctx.message.message_id },
       });
       return;
     }
 
-    if (!BLACKLIST.has(targetId.toString())) {
-      await ctx.reply("This user is not blacklisted!", {
-        reply_parameters: { message_id: ctx.message.message_id },
-      });
-      return;
-    }
-
-    BLACKLIST.delete(targetId.toString());
-    await saveBlacklist();
+    await removeFromBlacklistFile(targetId.toString());
     await ctx.reply(`User ${targetId} has been removed from the blacklist.`, {
       reply_parameters: { message_id: ctx.message.message_id },
     });
