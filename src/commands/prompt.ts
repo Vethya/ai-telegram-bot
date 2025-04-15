@@ -7,6 +7,7 @@ import {
 } from "../utils/checks";
 import { generateResponse } from "../ai-service";
 import { Message } from "telegraf/types";
+import { getContext } from "../db/services";
 
 // Map to store user message ID to bot reply message ID
 const messageReplyMap = new Map<number, number>();
@@ -313,6 +314,16 @@ export default (bot: Telegraf<Context>) => {
       role: "user",
       content: "Please describe this text.",
     })};
+
+    // Get chat context from database if available
+    const chatContext = await getContext(chatId.toString());
+    if (chatContext) {
+      // Add the chat context as a user message at the beginning
+      contextMessages.unshift({
+        role: "user",
+        content: `Context: ${chatContext}`,
+      });
+    }
 
     console.log("Context messages:", JSON.stringify(contextMessages, null, 2));
 

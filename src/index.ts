@@ -5,6 +5,7 @@ import startCommand from "./commands/start";
 import promptCommand from "./commands/prompt";
 import blacklistCommand from "./commands/blacklist";
 import whitelistCommand from "./commands/whitelist";
+import contextCommand from "./commands/context";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ connectDB().catch(console.error);
 startCommand(bot);
 blacklistCommand(bot);
 whitelistCommand(bot); // Register whitelist commands before prompt
+contextCommand(bot); // Register context commands
 promptCommand(bot);
 
 // Start the bot

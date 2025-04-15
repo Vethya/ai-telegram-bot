@@ -1,4 +1,4 @@
-import { Admin, Whitelist, Blacklist } from './models';
+import { Admin, Whitelist, Blacklist, Context } from './models';
 
 // Admin services
 export const isAdmin = async (userId: string): Promise<boolean> => {
@@ -40,4 +40,26 @@ export const addToBlacklist = async (userId: string): Promise<void> => {
 
 export const removeFromBlacklist = async (userId: string): Promise<void> => {
   await Blacklist.deleteOne({ userId });
+};
+
+// Context services
+export const getContext = async (chatId: string): Promise<string | null> => {
+  const context = await Context.findOne({ chatId });
+  return context ? context.prompt : null;
+};
+
+export const setContext = async (chatId: string, prompt: string): Promise<void> => {
+  const existingContext = await Context.findOne({ chatId });
+  
+  if (existingContext) {
+    existingContext.prompt = prompt;
+    existingContext.updatedAt = new Date();
+    await existingContext.save();
+  } else {
+    await Context.create({ chatId, prompt });
+  }
+};
+
+export const removeContext = async (chatId: string): Promise<void> => {
+  await Context.deleteOne({ chatId });
 }; 
