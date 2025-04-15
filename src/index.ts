@@ -4,6 +4,7 @@ import { connectDB } from "./db/connection";
 import startCommand from "./commands/start";
 import promptCommand from "./commands/prompt";
 import blacklistCommand from "./commands/blacklist";
+import whitelistCommand from "./commands/whitelist";
 
 dotenv.config();
 
@@ -14,7 +15,8 @@ connectDB().catch(console.error);
 
 // Register commands in a specific order
 startCommand(bot);
-blacklistCommand(bot); // Register blacklist commands before prompt
+blacklistCommand(bot);
+whitelistCommand(bot); // Register whitelist commands before prompt
 promptCommand(bot);
 
 // Start the bot
