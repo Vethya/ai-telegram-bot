@@ -1,5 +1,5 @@
 {
-  "name": "ai-tg-bot",
+  "name": "ai-telegram-bot",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -20,7 +20,7 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Vethya/ai-tg-bot.git"
+    "url": "git+https://github.com/Vethya/ai-telegram-bot.git"
   },
   "engines": {
     "node": ">=16.0.0"

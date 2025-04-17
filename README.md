@@ -28,8 +28,8 @@ A powerful Telegram chatbot powered by AI that provides intelligent responses an
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Vethya/ai-tg-bot.git
-   cd ai-tg-bot
+   git clone https://github.com/Vethya/ai-telegram-bot.git
+   cd ai-telegram-bot
    ```
 
 2. Install dependencies:
@@ -78,25 +78,25 @@ To run the bot in production using PM2:
 
 2. Start the bot with PM2:
    ```bash
-   pm2 start dist/index.js --name "ai-tg-bot"
+   pm2 start dist/index.js --name "ai-telegram-bot"
    ```
 
 3. Additional PM2 commands:
    ```bash
    # View logs
-   pm2 logs ai-tg-bot
+   pm2 logs ai-telegram-bot
 
    # Monitor the process
    pm2 monit
 
    # Restart the bot
-   pm2 restart ai-tg-bot
+   pm2 restart ai-telegram-bot
 
    # Stop the bot
-   pm2 stop ai-tg-bot
+   pm2 stop ai-telegram-bot
 
    # Delete the bot from PM2
-   pm2 delete ai-tg-bot
+   pm2 delete ai-telegram-bot
    ```
 
 4. To ensure the bot starts automatically on system reboot:
