@@ -1,4 +1,13 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+
+# Environment variables
 .env
+
 /dist
-blacklist.json
 /node_modules

@@ -4,15 +4,27 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "migrate": "ts-node src/db/migrate.ts"
+    "dev": "nodemon src/index.ts"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "telegram",
+    "bot",
+    "ai",
+    "chatbot",
+    "typescript",
+    "nodejs"
+  ],
+  "author": "Vethya",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vethya/ai-tg-bot.git"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "devDependencies": {
     "nodemon": "^3.1.9",
     "ts-node": "^10.9.2"

@@ -191,7 +191,6 @@ export default (bot: Telegraf<Context>) => {
             userContent.push({ type: "image", image: entry.imageUrl });
           }
 
-          console.log("added in role user 1");
           contextMessages.push({
             role: "user",
             content:
@@ -209,7 +208,6 @@ export default (bot: Telegraf<Context>) => {
         });
       } else if ("text" in replyToMessage && replyToMessage.text) {
         // Single reply to a text message
-        console.log("added in role user 2");
         contextMessages.push({ role: "user", content: replyToMessage.text });
       } else if (replyImageUrl) {
         // Single reply to an image message
@@ -224,7 +222,6 @@ export default (bot: Telegraf<Context>) => {
         }
         replyContent.push({ type: "image", image: replyImageUrl });
 
-        console.log("added in role user 3");
         contextMessages.push({
           role: "user",
           content: replyContent,
@@ -298,7 +295,6 @@ export default (bot: Telegraf<Context>) => {
       });
     }
 
-    console.log("added in role user 4");
     if (userContent.length === 1 && userContent[0].type === "text") {
       contextMessages.push({
         role: "user",
