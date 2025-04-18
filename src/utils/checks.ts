@@ -3,7 +3,7 @@ import { isAdmin as isAdminDB, isWhitelisted as isWhitelistedDB, isBlacklisted a
 
 dotenv.config();
 
-const RATE_LIMIT_SECONDS = 10;
+const RATE_LIMIT_SECONDS = 2;
 const rateLimitMap = new Map<number, number>();
 
 export const isWhitelisted = async (chatId: number | string): Promise<boolean> => {
