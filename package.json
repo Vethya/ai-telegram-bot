@@ -30,6 +30,11 @@
     "ts-node": "^10.9.2"
   },
   "dependencies": {
+    "@agentic/ai-sdk": "^7.6.4",
+    "@agentic/calculator": "^7.6.4",
+    "@agentic/core": "^7.6.4",
+    "@agentic/stdlib": "^7.6.4",
+    "@agentic/weather": "^7.6.4",
     "@ai-sdk/google": "^1.1.17",
     "@types/node": "^22.13.5",
     "ai": "^4.1.46",
