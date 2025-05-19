@@ -16,9 +16,10 @@ export default (bot: Telegraf) => {
     
     // Prompt command
     helpMessage += "*AI Interaction:*\n";
-    helpMessage += "• /prompt or /p <text or image> - Ask the AI a question\n";
+    helpMessage += "• /prompt or /p <text> - Ask the AI a question\n";
     helpMessage += "• Reply to a bot message - Ask follow-up questions\n";
     helpMessage += "• Reply to a message with /prompt or /p - Ask the AI a question with the reply as context\n";
+    helpMessage += "• Reply to a message with an image - Ask the AI a question about the image\n";
     helpMessage += "• Mention the bot - Ask a question. Works like /prompt and /p\n\n";
     
     // Context commands

@@ -1,4 +1,5 @@
 import { Telegraf, Context } from "telegraf";
+import { message } from "telegraf/filters";
 import {
   isAdmin,
   isBlacklisted,
@@ -127,8 +128,6 @@ export default (bot: Telegraf<Context>) => {
       text = message.text || "";
     } else if ("caption" in message! && message.caption) {
       text = message.caption;
-    } else if (!("photo" in message!)) {
-      return;
     }
 
     // Get image URL if the message contains an image
@@ -206,55 +205,33 @@ export default (bot: Telegraf<Context>) => {
             });
           }
         });
-      } else if ("text" in replyToMessage && replyToMessage.text) {
-        // Single reply to a text message
-        contextMessages.push({ role: "user", content: replyToMessage.text });
-      } else if (replyImageUrl) {
-        // Single reply to an image message
+      } else {
+        // Single reply to a message
+        const replyContent = [];
         let replyText = "";
-        if ("caption" in replyToMessage && replyToMessage.caption) {
+
+        if ("text" in replyToMessage && replyToMessage.text) {
+          replyText = replyToMessage.text;
+        } else if ("caption" in replyToMessage && replyToMessage.caption) {
           replyText = replyToMessage.caption;
         }
 
-        const replyContent = [];
         if (replyText) {
           replyContent.push({ type: "text", text: replyText });
         }
-        replyContent.push({ type: "image", image: replyImageUrl });
+        if (replyImageUrl) {
+          replyContent.push({ type: "image", image: replyImageUrl });
+        }
 
-        contextMessages.push({
-          role: "user",
-          content: replyContent,
-        });
-      } else {
-        await ctx.reply(
-          "The replied-to message must contain text or an image.",
-          {
-            reply_parameters: { message_id: messageId },
-          }
-        );
-        return;
+        if (replyContent.length > 0) {
+          contextMessages.push({
+            role: "user",
+            content: replyContent.length === 1 && replyContent[0].type === "text"
+              ? replyContent[0].text
+              : replyContent,
+          });
+        }
       }
-    }
-    // If not replying to a message, just use this message
-    else {
-      // If this is a command and no prompt or image is provided, show usage
-      if (!isReplyWithoutCommand && !prompt && !currentImageUrl) {
-        await ctx.reply(
-          "Please provide a prompt or image! Usage: /prompt or /p <your question> or send an image with caption",
-          {
-            reply_parameters: { message_id: messageId },
-          }
-        );
-        return;
-      }
-
-      replyChainMap.set(messageId, {
-        text,
-        botResponse: undefined,
-        parentId: undefined,
-        imageUrl: currentImageUrl,
-      });
     }
 
     let userPrompt = "";
@@ -295,21 +272,15 @@ export default (bot: Telegraf<Context>) => {
       });
     }
 
-    if (userContent.length === 1 && userContent[0].type === "text") {
+    // Add the current message to context
+    if (userContent.length > 0) {
       contextMessages.push({
         role: "user",
-        content:userContent[0].text,
+        content: userContent.length === 1 && userContent[0].type === "text"
+          ? userContent[0].text
+          : userContent,
       });
-    } else if (userContent.length === 0 && replyImageUrl) {
-      contextMessages.push({
-        role: "user",
-        content: "Please describe this image in detail.",
-      });
-    } else if (userContent.length === 0 && replyToMessage && "text" in replyToMessage && replyToMessage.text) {
-    contextMessages.push({
-      role: "user",
-      content: "Please describe this text.",
-    })};
+    }
 
     // Get chat context from database if available
     const chatContext = await getContext(chatId.toString());
@@ -437,6 +408,21 @@ export default (bot: Telegraf<Context>) => {
 
   // Handle initial /prompt or /p command
   bot.command(["prompt", "p"], async (ctx) => {
+    // Check if the message has a photo
+    /* Commented out photo handling
+    if ("photo" in ctx.message) {
+      await handlePrompt(ctx);
+      return;
+    }
+    */
+    
+    // For text messages, check if there's a reply
+    if ("reply_to_message" in ctx.message && ctx.message.reply_to_message) {
+      await handlePrompt(ctx);
+      return;
+    }
+    
+    // For regular text messages
     await handlePrompt(ctx);
   });
 
@@ -455,9 +441,6 @@ export default (bot: Telegraf<Context>) => {
       // Check if the message mentions the bot
       const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
       if (mentionRegex.test(text)) {
-        // Extract the prompt after the mention
-        const prompt = text.replace(mentionRegex, '').trim();
-        
         await handlePrompt(ctx, false, false, true);
         return;
       }
@@ -469,6 +452,7 @@ export default (bot: Telegraf<Context>) => {
 
     const replyToMessage = ctx.message.reply_to_message;
 
+    // Check if it's a reply to a bot message
     let userMessageId: number | undefined;
     for (const [key, value] of messageReplyMap.entries()) {
       if (value === replyToMessage.message_id) {
@@ -478,20 +462,6 @@ export default (bot: Telegraf<Context>) => {
     }
 
     if (userMessageId && replyChainMap.has(userMessageId)) {
-      // Only process prompt commands in this handler
-      if (
-        "text" in ctx.message &&
-        ctx.message.text &&
-        ctx.message.text.startsWith("/")
-      ) {
-        // Check if it's a prompt command
-        const commandMatch = ctx.message.text.match(/^\/(prompt|p)(?:\s|$)/);
-        if (!commandMatch) {
-          // Not a prompt command, let other handlers process it
-          return;
-        }
-      }
-
       // Process the prompt
       await handlePrompt(ctx, false, true);
     }
@@ -526,6 +496,7 @@ export default (bot: Telegraf<Context>) => {
       }
     }
 
+    /* Commented out photo handling
     // Check if it's a photo with caption containing the command
     if ("photo" in ctx.editedMessage && ctx.editedMessage.caption) {
       const editedCaption = ctx.editedMessage.caption;
@@ -550,53 +521,56 @@ export default (bot: Telegraf<Context>) => {
         }
       }
     }
+    */
   });
 
+  /* Commented out photo handling middleware
   // Handle photo messages with /prompt or /p command in caption
-  bot.on("photo", async (ctx) => {
-    if (!ctx.message) return;
-
-    // Handle photos with captions that include our command
-    if (ctx.message.caption) {
-      const captionText = ctx.message.caption;
-      const commandMatch = captionText.match(/^\/(prompt|p)(?:\s|$)/);
-      if (commandMatch) {
-        await handlePrompt(ctx);
-        return;
-      }
+  bot.use(async (ctx, next) => {
+    if (ctx.message && "photo" in ctx.message) {
+      console.log("Photo message received");
       
-      // Check if the caption mentions the bot
-      const botInfo = await ctx.telegram.getMe();
-      const botUsername = botInfo.username;
-      const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
-      if (mentionRegex.test(captionText)) {
-        // Extract the prompt after the mention
-        const prompt = captionText.replace(mentionRegex, '').trim();
+      // Handle photos with captions that include our command
+      if (ctx.message.caption) {
+        const captionText = ctx.message.caption;
         
-        // If there's a prompt, handle it
-        if (prompt) {
+        // Check for command first
+        const commandMatch = captionText.match(/^\/(prompt|p)(?:\s|$)/);
+        if (commandMatch) {
           await handlePrompt(ctx);
           return;
         }
-      }
-    }
+        
+        // Then check for mention
+        const botInfo = await ctx.telegram.getMe();
+        const botUsername = botInfo.username;
+        const mentionRegex = new RegExp(`@${botUsername}\\b`, 'i');
+        if (mentionRegex.test(captionText)) {
+          await handlePrompt(ctx);
+          return;
+        }
+      } else {
+        // If no caption, check if it's a reply to a bot message
+        if ("reply_to_message" in ctx.message && ctx.message.reply_to_message) {
+          const replyToMessage = ctx.message.reply_to_message;
 
-    // Also handle photo replies to bot messages even without command
-    if ("reply_to_message" in ctx.message && ctx.message.reply_to_message) {
-      const replyToMessage = ctx.message.reply_to_message;
+          // Check if replying to a bot message
+          let userMessageId: number | undefined;
+          for (const [key, value] of messageReplyMap.entries()) {
+            if (value === replyToMessage.message_id) {
+              userMessageId = key;
+              break;
+            }
+          }
 
-      // Check if replying to a bot message
-      let userMessageId: number | undefined;
-      for (const [key, value] of messageReplyMap.entries()) {
-        if (value === replyToMessage.message_id) {
-          userMessageId = key;
-          break;
+          if (userMessageId && replyChainMap.has(userMessageId)) {
+            await handlePrompt(ctx, false, true);
+            return;
+          }
         }
       }
-
-      if (userMessageId && replyChainMap.has(userMessageId)) {
-        await handlePrompt(ctx, false, true);
-      }
     }
+    return next();
   });
+  */
 };
